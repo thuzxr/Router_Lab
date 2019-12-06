@@ -1,6 +1,11 @@
 #include "router.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <vector>
+
+using std::vector;
+
+vector<RoutingTableEntry> routingTable;
 
 /*
   RoutingTable Entry 的定义如下：
@@ -27,7 +32,19 @@
  * 删除时按照 addr 和 len 匹配。
  */
 void update(bool insert, RoutingTableEntry entry) {
-  // TODO:
+    for (int i = 0; i < routingTable.size(); i++) {
+        if (routingTable[i].addr == entry.addr && routingTable[i].len == entry.len) {
+            if (insert) {
+                routingTable[i] = entry;
+            }
+            else {
+                routingTable[i] = routingTable[routingTable.size() - 1];
+                routingTable.pop_back();
+            }
+            return;
+        }
+    }
+    routingTable.push_back(entry);
 }
 
 /**
@@ -38,8 +55,22 @@ void update(bool insert, RoutingTableEntry entry) {
  * @return 查到则返回 true ，没查到则返回 false
  */
 bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
-  // TODO:
-  *nexthop = 0;
-  *if_index = 0;
-  return false;
+    *nexthop = 0;
+    *if_index = 0;
+    uint32_t max_len = 0;
+    for (int i = 0; i < routingTable.size(); i++) {
+        uint32_t ans = addr ^ routingTable[i].addr;
+        ans <<= (32 - routingTable[i].len);
+        if (ans == 0) {
+            if (max_len < routingTable[i].len) {
+                *nexthop = routingTable[i].nexthop;
+                *if_index = routingTable[i].if_index;
+                max_len = routingTable[i].len;
+            }
+        }
+    }
+    if (max_len != 0) {
+        return true;
+    }
+    return false;
 }

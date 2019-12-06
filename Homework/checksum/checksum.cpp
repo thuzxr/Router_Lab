@@ -8,6 +8,20 @@
  * @return 校验和无误则返回 true ，有误则返回 false
  */
 bool validateIPChecksum(uint8_t *packet, size_t len) {
-  // TODO:
-  return true;
+    uint16_t checksum = (packet[10] << 8) | (packet[11]);
+    size_t header_len = packet[0] & 0x0F;
+    packet[10] = packet[11] = 0;
+    uint32_t sum = 0;
+    for (size_t i = 0; i < header_len * 4; i += 2) {
+        sum += (packet[i] << 8) | (packet[i+1]);
+    }
+    while (sum >> 16 > 0) {
+        sum = (sum >> 16) + (sum & 0xffff);
+    }
+    packet[10] = checksum >> 8;
+    packet[11] = checksum & 0xff;
+
+    uint16_t ans = ~sum & 0xffff;
+    
+    return ans == checksum;
 }

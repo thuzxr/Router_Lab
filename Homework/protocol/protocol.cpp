@@ -1,6 +1,8 @@
 #include "rip.h"
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <arpa/inet.h>
 
 /*
   在头文件 rip.h 中定义了如下的结构体：
@@ -44,8 +46,74 @@
  * Mask 的二进制是不是连续的 1 与连续的 0 组成等等。
  */
 bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
-  // TODO:
-  return false;
+    uint16_t tot_len = (packet[2] << 8) | (packet[3] & 0xff);
+    if (tot_len > len) {
+        return false;
+    }
+
+    uint8_t ip_header_len = (packet[0] & 0x0F) * 4;
+    uint8_t udp_header_len = 8;
+    uint8_t header_len = ip_header_len + udp_header_len;
+    uint8_t num = (tot_len - header_len) / 20;
+
+    uint8_t command = packet[header_len];
+    uint8_t version = packet[header_len + 1];
+    uint16_t zero = (packet[header_len + 2] << 8) | packet[header_len + 3];
+
+    if (command != 1 && command != 2) {
+        return false;
+    }
+    if (version != 2) {
+        return false;
+    }
+    if (zero != 0) {
+        return false;
+    }
+
+    output->numEntries = 0;
+
+    for (uint8_t i = header_len + 4; i < tot_len; i += 20) {
+        uint16_t family = (packet[i] << 8) | packet[i+1];
+        uint16_t tag = (packet[i+2] << 8) | packet[i+3];
+        uint32_t ip = *(uint32_t*)(packet + i + 4);
+        uint32_t netmask = *(uint32_t*)(packet + i + 8);
+        uint32_t nexthop = *(uint32_t*)(packet + i + 12);
+        uint32_t metric = *(uint32_t*)(packet + i + 16);
+        if (command == 1 && family != 0) {
+            return false;
+        }
+        if (command == 2 && family != 2) {
+            return false;
+        }
+        if (tag != 0) {
+            return false;
+        }
+        uint32_t tmp = ntohl(metric);
+        if (tmp < 1 || tmp > 16) {
+            return false;
+        }
+        tmp = ntohl(netmask);
+        for (int i = 0; i < 32; i++) {
+            if (tmp == 0) {
+                break;
+            }
+            if ( ((tmp >> 31) & 1) == 1 ) {
+                tmp <<= 1;
+            }
+            else {
+                return false;
+            }
+        }
+
+        auto &entry = output->entries[output->numEntries++];
+        entry.addr = ip;
+        entry.mask = netmask;
+        entry.nexthop = nexthop;
+        entry.metric = metric;
+    }
+
+    output->command = command;
+    return true;
 }
 
 /**
@@ -59,6 +127,19 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
  * 需要注意一些没有保存在 RipPacket 结构体内的数据的填写。
  */
 uint32_t assemble(const RipPacket *rip, uint8_t *buffer) {
-  // TODO:
-  return 0;
+    buffer[0] = rip->command;
+    buffer[1] = 2;
+    buffer[2] = buffer[3] = 0;
+    uint32_t top = 4;
+    for (int i = 0; i < rip->numEntries; i++) {
+        buffer[top] = 0;
+        buffer[top+1] = rip->command == 1 ? 0 : 2;
+        buffer[top+2] = buffer[top+3] = 0;
+        *(uint32_t*)(buffer+top+4) = rip->entries[i].addr;
+        *(uint32_t*)(buffer+top+8) = rip->entries[i].mask;
+        *(uint32_t*)(buffer+top+12) = rip->entries[i].nexthop;
+        *(uint32_t*)(buffer+top+16) = rip->entries[i].metric;
+        top += 20;      
+    }
+    return 4 + rip->numEntries * 20;
 }
