@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <vector>
+#include "rip.h"
+#include <arpa/inet.h>
 
 using std::vector;
 
@@ -47,6 +49,17 @@ void update(bool insert, RoutingTableEntry entry) {
     routingTable.push_back(entry);
 }
 
+void rip_update(RoutingTableEntry entry) {
+    for (int i = 0; i < routingTable.size(); i++) {
+        if (routingTable[i].addr == entry.addr && routingTable[i].len == entry.len) {
+            if (entry.metric + 1 <= routingTable[i].metric)
+            routingTable[i] = entry;
+            routingTable[i].metric++;
+            return;
+        }
+    }
+    routingTable.push_back(entry);
+}
 /**
  * @brief 进行一次路由表的查询，按照最长前缀匹配原则
  * @param addr 需要查询的目标地址，大端序
@@ -73,4 +86,47 @@ bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
         return true;
     }
     return false;
+}
+
+RipPacket ConstructRequestRip() {
+    RipPacket ret;
+    ret.numEntries = routingTable.size();
+    ret.command = 2;
+    for (int i = 0; i < ret.numEntries; i++) {
+        ret.entries[i].addr = routingTable[i].addr;
+        ret.entries[i].mask = htonl(0xffffffff << (32 - routingTable[i].len));
+        ret.entries[i].nexthop = routingTable[i].nexthop;
+        ret.entries[i].metric = 16;
+    }
+    return ret;
+}
+
+RipPacket constructResponseRip() {
+    RipPacket ret;
+    ret.numEntries = routingTable.size();
+    ret.command = 2;
+    for (int i = 0; i < ret.numEntries; i++) {
+        ret.entries[i].addr = routingTable[i].addr;
+        ret.entries[i].mask = htonl(0xffffffff << (32 - routingTable[i].len));
+        ret.entries[i].nexthop = routingTable[i].nexthop;
+        ret.entries[i].metric = routingTable[i].metric;
+    }
+    return ret;
+}
+
+RipPacket constructResponseRip(const uint32_t &ignore) {
+    RipPacket ret;
+    ret.numEntries = 0;
+    ret.command = 2;
+    for (int i = 0; i < routingTable.size(); i++) {
+        uint32_t mask = htonl(0xffffffff << (32 - routingTable[i].len));
+        if ((ignore & mask) == (routingTable[i].addr & mask))
+            continue;
+        ret.entries[ret.numEntries].addr = routingTable[i].addr;
+        ret.entries[ret.numEntries].mask = mask;
+        ret.entries[ret.numEntries].nexthop = routingTable[i].nexthop;
+        ret.entries[ret.numEntries].metric = routingTable[i].metric;
+        ret.numEntries++;
+    }
+    return ret;
 }

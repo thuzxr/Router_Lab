@@ -3,7 +3,7 @@
 
 uint32_t origin_sum = 0;
 
-bool validateIPChecksum(uint8_t *packet, size_t len) {
+bool validateIPChecksum_forward(uint8_t *packet, size_t len) {
     uint16_t checksum = (packet[10] << 8) | (packet[11]);
     size_t header_len = packet[0] & 0x0F;
     packet[10] = packet[11] = 0;
@@ -33,7 +33,7 @@ bool validateIPChecksum(uint8_t *packet, size_t len) {
  * @return 校验和无误则返回 true ，有误则返回 false
  */
 bool forward(uint8_t *packet, size_t len) {
-    if (validateIPChecksum(packet, len)) {
+    if (validateIPChecksum_forward(packet, len)) {
         packet[8] -= 1;
         origin_sum -= 1 << 8;
         while (origin_sum >> 16 > 0) {
