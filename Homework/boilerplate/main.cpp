@@ -17,7 +17,7 @@ extern uint32_t assemble(const RipPacket *rip, uint8_t *buffer);
 // extern RipPacket constructRequestRip();
 extern RipPacket constructResponseRip();
 extern RipPacket constructResponseRip(const uint32_t &ignore);
-
+extern void printRoutingTable();
 uint8_t packet[2048];
 uint8_t output[2048];
 // 0: 10.0.0.1
@@ -25,7 +25,7 @@ uint8_t output[2048];
 // 2: 10.0.2.1
 // 3: 10.0.3.1
 // 你可以按需进行修改，注意端序
-in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0100000a, 0x0101000a, 0x0102000a, 0x0103000a};
+in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0203a8c0, 0x0104a8c0, 0x0102000a, 0x0103000a};
 
 const uint32_t multicast_addr = 0x090000e0; // 组播地址224.0.0.9
 
@@ -87,11 +87,11 @@ int main(int argc, char *argv[]) {
   // 10.0.3.0/24 if 3
   for (uint32_t i = 0; i < N_IFACE_ON_BOARD;i++) {
     RoutingTableEntry entry = {
-      .addr = addrs[i], // big endian
+      .addr = addrs[i] & len2mask(24), // big endian
       .len = 24, // small endian
       .if_index = i, // small endian
       .nexthop = 0, // big endian, means direct
-      .metric = 0
+      .metric = 1
     };
     update(true, entry);
   }
@@ -99,19 +99,19 @@ int main(int argc, char *argv[]) {
   uint64_t last_time = 0;
   while (1) {
     uint64_t time = HAL_GetTicks();
-    if (time > last_time + 30 * 1000) {
+    if (time > last_time + 5 * 1000) {
+      printRoutingTable();
       // What to do? --Send Response
       constructCommonHeader();
       *(uint32_t*)(output + 16) = multicast_addr;
-
-      RipPacket res = constructResponseRip();
-      uint16_t rip_len = assemble(&res, output + 28);
-      *(uint16_t*)(output + 2) = htons(rip_len + 28);
-      *(uint16_t*)(output + 24) = htons(rip_len + 8);
       output[26] = output[27] = 0;
 
       for (uint32_t i = 0; i < N_IFACE_ON_BOARD; i++) {
         *(uint32_t*)(output + 12) = addrs[i];
+        RipPacket res = constructResponseRip(addrs[i]);
+        uint16_t rip_len = assemble(&res, output + 28);
+        *(uint16_t*)(output + 2) = htons(rip_len + 28);
+        *(uint16_t*)(output + 24) = htons(rip_len + 8);
         calcChecksum();
 
         macaddr_t dst_mac;
@@ -206,18 +206,18 @@ int main(int argc, char *argv[]) {
               .addr = rip.entries[i].addr,
               .len = mask2len(rip.entries[i].mask),
               .if_index = if_index,
-              .nexthop = rip.entries[i].nexthop,
+              .nexthop = src_addr,
               .metric = rip.entries[i].metric
             };
             if (rip.entries[i].metric > 15) {
-              update(false, entry);
-              resp.entries[resp.numEntries++] = rip.entries[i];
+              // update(false, entry);
+              // resp.entries[resp.numEntries++] = rip.entries[i];
             }
             else {
               rip_update(entry);
             }
           }
-
+/*
           if (resp.numEntries > 0) {
             constructCommonHeader();
             *(uint32_t*)(output + 16) = multicast_addr;
@@ -238,34 +238,35 @@ int main(int argc, char *argv[]) {
               HAL_SendIPPacket(i, output, 20 + 8 + rip_len, dst_mac);
             }
           }
+          */
         }
-      } else {
-        // forward
-        // beware of endianness
-        uint32_t nexthop, dest_if;
-        if (query(dst_addr, &nexthop, &dest_if)) {
+      }
+    } else {
+      // forward
+      // beware of endianness
+      uint32_t nexthop, dest_if;
+      if (query(dst_addr, &nexthop, &dest_if)) {
+        // found
+        macaddr_t dest_mac;
+        // direct routing
+        if (nexthop == 0) {
+          nexthop = dst_addr;
+        }
+        if (HAL_ArpGetMacAddress(dest_if, nexthop, dest_mac) == 0) {
           // found
-          macaddr_t dest_mac;
-          // direct routing
-          if (nexthop == 0) {
-            nexthop = dst_addr;
+          memcpy(output, packet, res);
+          // update ttl and checksum
+          forward(output, res);
+          // TODO: you might want to check ttl=0 case
+          if (output[8] == 0) {
+            continue;
           }
-          if (HAL_ArpGetMacAddress(dest_if, nexthop, dest_mac) == 0) {
-            // found
-            memcpy(output, packet, res);
-            // update ttl and checksum
-            forward(output, res);
-            // TODO: you might want to check ttl=0 case
-            if (output[8] == 0) {
-              continue;
-            }
-            HAL_SendIPPacket(dest_if, output, res, dest_mac);
-          } else {
-            // not found
-          }
+          HAL_SendIPPacket(dest_if, output, res, dest_mac);
         } else {
           // not found
         }
+      } else {
+        // not found
       }
     }
   }

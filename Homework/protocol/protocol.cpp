@@ -78,7 +78,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
         uint32_t ip = *(uint32_t*)(packet + i + 4);
         uint32_t netmask = *(uint32_t*)(packet + i + 8);
         uint32_t nexthop = *(uint32_t*)(packet + i + 12);
-        uint32_t metric = *(uint32_t*)(packet + i + 16);
+        uint32_t metric = ntohl(*(uint32_t*)(packet + i + 16));
         if (command == 1 && family != 0) {
             return false;
         }
@@ -88,11 +88,10 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
         if (tag != 0) {
             return false;
         }
-        uint32_t tmp = ntohl(metric);
-        if (tmp < 1 || tmp > 16) {
+        if (metric < 1 || metric > 16) {
             return false;
         }
-        tmp = ntohl(netmask);
+        uint32_t tmp = ntohl(netmask);
         for (int i = 0; i < 32; i++) {
             if (tmp == 0) {
                 break;
@@ -138,7 +137,7 @@ uint32_t assemble(const RipPacket *rip, uint8_t *buffer) {
         *(uint32_t*)(buffer+top+4) = rip->entries[i].addr;
         *(uint32_t*)(buffer+top+8) = rip->entries[i].mask;
         *(uint32_t*)(buffer+top+12) = rip->entries[i].nexthop;
-        *(uint32_t*)(buffer+top+16) = rip->entries[i].metric;
+        *(uint32_t*)(buffer+top+16) = htonl(rip->entries[i].metric);
         top += 20;      
     }
     return 4 + rip->numEntries * 20;

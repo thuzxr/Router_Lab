@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "router.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -52,12 +53,14 @@ void update(bool insert, RoutingTableEntry entry) {
 void rip_update(RoutingTableEntry entry) {
     for (int i = 0; i < routingTable.size(); i++) {
         if (routingTable[i].addr == entry.addr && routingTable[i].len == entry.len) {
-            if (entry.metric + 1 <= routingTable[i].metric)
-            routingTable[i] = entry;
-            routingTable[i].metric++;
+            if (entry.metric + 1 <= routingTable[i].metric) {
+                routingTable[i] = entry;
+                routingTable[i].metric++;
+            }
             return;
         }
     }
+    entry.metric++;
     routingTable.push_back(entry);
 }
 /**
@@ -88,19 +91,6 @@ bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
     return false;
 }
 
-RipPacket ConstructRequestRip() {
-    RipPacket ret;
-    ret.numEntries = routingTable.size();
-    ret.command = 2;
-    for (int i = 0; i < ret.numEntries; i++) {
-        ret.entries[i].addr = routingTable[i].addr;
-        ret.entries[i].mask = htonl(0xffffffff << (32 - routingTable[i].len));
-        ret.entries[i].nexthop = routingTable[i].nexthop;
-        ret.entries[i].metric = 16;
-    }
-    return ret;
-}
-
 RipPacket constructResponseRip() {
     RipPacket ret;
     ret.numEntries = routingTable.size();
@@ -129,4 +119,10 @@ RipPacket constructResponseRip(const uint32_t &ignore) {
         ret.numEntries++;
     }
     return ret;
+}
+
+void printRoutingTable() {
+    for(int i = 0; i < routingTable.size(); i++) {
+        printf("%0x %u %u %0x %u\n", routingTable[i].addr, routingTable[i].len, routingTable[i].if_index, routingTable[i].nexthop, routingTable[i].metric);
+    }
 }
