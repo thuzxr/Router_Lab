@@ -15,8 +15,7 @@ extern bool forward(uint8_t *packet, size_t len);
 extern bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output);
 extern uint32_t assemble(const RipPacket *rip, uint8_t *buffer);
 // extern RipPacket constructRequestRip();
-extern RipPacket constructResponseRip();
-extern RipPacket constructResponseRip(const uint32_t &ignore);
+extern RipPacket constructResponseRip(const uint32_t &ip, const uint& if_index);
 extern void printRoutingTable();
 uint8_t packet[2048];
 uint8_t output[2048];
@@ -25,7 +24,7 @@ uint8_t output[2048];
 // 2: 10.0.2.1
 // 3: 10.0.3.1
 // 你可以按需进行修改，注意端序
-in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0203a8c0, 0x0104a8c0, 0x0102000a, 0x0103000a};
+in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0101a8c0, 0x0103a8c0, 0x0102000a, 0x0103000a};
 
 const uint32_t multicast_addr = 0x090000e0; // 组播地址224.0.0.9
 
@@ -108,7 +107,7 @@ int main(int argc, char *argv[]) {
 
       for (uint32_t i = 0; i < N_IFACE_ON_BOARD; i++) {
         *(uint32_t*)(output + 12) = addrs[i];
-        RipPacket res = constructResponseRip(addrs[i]);
+        RipPacket res = constructResponseRip(addrs[i], i);
         uint16_t rip_len = assemble(&res, output + 28);
         *(uint16_t*)(output + 2) = htons(rip_len + 28);
         *(uint16_t*)(output + 24) = htons(rip_len + 8);
@@ -178,7 +177,7 @@ int main(int argc, char *argv[]) {
           }
           RipPacket resp;
           // TODO: fill resp
-          resp = constructResponseRip(src_addr);
+          resp = constructResponseRip(src_addr, if_index);
           // assemble
           // IP
           constructCommonHeader();
@@ -271,58 +270,4 @@ int main(int argc, char *argv[]) {
     }
   }
   return 0;
-}
-
-void Response(const uint32_t &addr) {
-  output[0] = 0x45;
-  output[1] = 0;
-  output[4] = output[5] = 0;
-  output[6] = output[7] = 0;
-  output[8] = 1;
-  output[9] = 0x11; // UDP protocol
-  output[10] = output[11] = 0;
-  *(uint32_t*)(output + 16) = addr;
-
-  // UDP header
-  *(uint16_t*)(output + 20) = htons(520);
-  *(uint16_t*)(output + 22) = htons(520);
-
-  RipPacket res = constructResponseRip();
-  uint16_t len = assemble(&res, output + 28) + 8;
-  *(uint16_t*)(output + 24) = htons(len);
-  output[26] = output[27] = 0;
-
-  for (uint32_t i = 0; i < N_IFACE_ON_BOARD; i++) {
-    output[10] = output[11] = 0;
-    output[26] = output[27] = 0;
-
-    *(uint32_t*)(output + 12) = addrs[i];
-    // IP header checksum
-    uint32_t sum = 0;
-    for (size_t i = 0; i < 20; i += 2) {
-      sum += (output[i] << 8) | (output[i+1]);
-    }
-    while (sum >> 16 > 0) {
-      sum = (sum >> 16) + (sum & 0xffff);
-    }
-    *(uint16_t*)(output + 10) = htons(~sum & 0xffff);
-    // UDP header checksum
-    sum = 0;
-    sum += *(uint16_t*)(output + 12);
-    sum += *(uint16_t*)(output + 14);
-    sum += *(uint16_t*)(output + 16);
-    sum += *(uint16_t*)(output + 18);
-    sum += 0x11;
-    sum += len;
-    for (size_t i = 0; i < len; i+=2) {
-      sum += (output[i+20] << 8) | (output[i+21]);
-    }
-    while (sum >> 16 > 0) {
-      sum = (sum >> 16) + (sum & 0xffff);
-    }
-    *(uint16_t*)(output + 26) = htons(~sum & 0xffff);
-    macaddr_t dst_mac;
-    HAL_ArpGetMacAddress(i, addr, dst_mac);
-    HAL_SendIPPacket(i, output, 20 + len, dst_mac);
-  }
 }

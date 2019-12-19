@@ -70,25 +70,43 @@ void rip_update(RoutingTableEntry entry) {
  * @param if_index 如果查询到目标，把表项的 if_index 写入
  * @return 查到则返回 true ，没查到则返回 false
  */
+// bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
+//     *nexthop = 0;
+//     *if_index = 0;
+//     uint32_t max_len = 0;
+//     for (int i = 0; i < routingTable.size(); i++) {
+//         uint32_t ans = addr ^ routingTable[i].addr;
+//         ans <<= (32 - routingTable[i].len);
+//         if (ans == 0) {
+//             if (max_len < routingTable[i].len) {
+//                 *nexthop = routingTable[i].nexthop;
+//                 *if_index = routingTable[i].if_index;
+//                 max_len = routingTable[i].len;
+//             }
+//         }
+//     }
+//     if (max_len != 0) {
+//         return true;
+//     }
+//     return false;
+// }
+
 bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
     *nexthop = 0;
     *if_index = 0;
     uint32_t max_len = 0;
-    for (int i = 0; i < routingTable.size(); i++) {
-        uint32_t ans = addr ^ routingTable[i].addr;
-        ans <<= (32 - routingTable[i].len);
-        if (ans == 0) {
-            if (max_len < routingTable[i].len) {
-                *nexthop = routingTable[i].nexthop;
-                *if_index = routingTable[i].if_index;
-                max_len = routingTable[i].len;
-            }
-        }
+  for (uint i = 0; i < routingTable.size(); i++) {
+    if ( (addr & htonl(0xffffffff << (32 - routingTable[i].len))) == routingTable[i].addr) {
+      if(max_len < routingTable[i].len) {
+        max_len = routingTable[i].len;
+        *nexthop = routingTable[i].nexthop;
+        *if_index = routingTable[i].if_index;
+      }
     }
-    if (max_len != 0) {
-        return true;
-    }
-    return false;
+  }
+  if(max_len > 0)
+    return true;
+  return false;
 }
 
 RipPacket constructResponseRip() {
@@ -104,17 +122,17 @@ RipPacket constructResponseRip() {
     return ret;
 }
 
-RipPacket constructResponseRip(const uint32_t &ignore) {
+RipPacket constructResponseRip(const uint32_t &ip, const uint& if_index) {
     RipPacket ret;
     ret.numEntries = 0;
     ret.command = 2;
     for (int i = 0; i < routingTable.size(); i++) {
         uint32_t mask = htonl(0xffffffff << (32 - routingTable[i].len));
-        if ((ignore & mask) == (routingTable[i].addr & mask))
+        if (if_index == routingTable[i].if_index)
             continue;
         ret.entries[ret.numEntries].addr = routingTable[i].addr;
         ret.entries[ret.numEntries].mask = mask;
-        ret.entries[ret.numEntries].nexthop = routingTable[i].nexthop;
+        ret.entries[ret.numEntries].nexthop = ip;
         ret.entries[ret.numEntries].metric = routingTable[i].metric;
         ret.numEntries++;
     }
