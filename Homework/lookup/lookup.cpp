@@ -70,27 +70,6 @@ void rip_update(RoutingTableEntry entry) {
  * @param if_index 如果查询到目标，把表项的 if_index 写入
  * @return 查到则返回 true ，没查到则返回 false
  */
-// bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
-//     *nexthop = 0;
-//     *if_index = 0;
-//     uint32_t max_len = 0;
-//     for (int i = 0; i < routingTable.size(); i++) {
-//         uint32_t ans = addr ^ routingTable[i].addr;
-//         ans <<= (32 - routingTable[i].len);
-//         if (ans == 0) {
-//             if (max_len < routingTable[i].len) {
-//                 *nexthop = routingTable[i].nexthop;
-//                 *if_index = routingTable[i].if_index;
-//                 max_len = routingTable[i].len;
-//             }
-//         }
-//     }
-//     if (max_len != 0) {
-//         return true;
-//     }
-//     return false;
-// }
-
 bool query(uint32_t addr, uint32_t *nexthop, uint32_t *if_index) {
     *nexthop = 0;
     *if_index = 0;
