@@ -54,25 +54,28 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
     uint8_t ip_header_len = (packet[0] & 0x0F) * 4;
     uint8_t udp_header_len = 8;
     uint8_t header_len = ip_header_len + udp_header_len;
-    uint8_t num = (tot_len - header_len) / 20;
+    // uint8_t num = (tot_len - header_len) / 20;
 
     uint8_t command = packet[header_len];
     uint8_t version = packet[header_len + 1];
     uint16_t zero = (packet[header_len + 2] << 8) | packet[header_len + 3];
 
     if (command != 1 && command != 2) {
+        printf("Error: 1\n");
         return false;
     }
     if (version != 2) {
+        printf("Error: 2\n");
         return false;
     }
     if (zero != 0) {
+        printf("Error: 3\n");
         return false;
     }
 
     output->numEntries = 0;
-
-    for (uint8_t i = header_len + 4; i < tot_len; i += 20) {
+    // printf("tot_len: %d\n", tot_len);
+    for (uint32_t i = header_len + 4; i < tot_len; i += 20) {
         uint16_t family = (packet[i] << 8) | packet[i+1];
         uint16_t tag = (packet[i+2] << 8) | packet[i+3];
         uint32_t ip = *(uint32_t*)(packet + i + 4);
@@ -80,15 +83,19 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
         uint32_t nexthop = *(uint32_t*)(packet + i + 12);
         uint32_t metric = ntohl(*(uint32_t*)(packet + i + 16));
         if (command == 1 && family != 0) {
+            printf("Error: 4\n");
             return false;
         }
         if (command == 2 && family != 2) {
+            printf("Error: 5\n");
             return false;
         }
         if (tag != 0) {
+            printf("Error: 6\n");
             return false;
         }
         if (metric < 1 || metric > 16) {
+            printf("Error: 7\n");
             return false;
         }
         uint32_t tmp = ntohl(netmask);
@@ -100,6 +107,7 @@ bool disassemble(const uint8_t *packet, uint32_t len, RipPacket *output) {
                 tmp <<= 1;
             }
             else {
+                printf("Error: 8\n");
                 return false;
             }
         }

@@ -27,11 +27,9 @@ uint8_t output[2048];
 // 2: 10.0.2.1
 // 3: 10.0.3.1
 // 你可以按需进行修改，注意端序
-in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0101a8c0, 0x0103a8c0, 0x0102000a, 0x0103000a};
+in_addr_t addrs[N_IFACE_ON_BOARD] = {0x0203a8c0, 0x0104a8c0, 0x0106a8c0, 0x0103000a};
 
 const uint32_t multicast_addr = 0x090000e0; // 组播地址224.0.0.9
-
-void Response(const uint32_t &addr);
 
 uint32_t len2mask(const uint16_t &len) { // big endian
   return htonl(0xffffffff << (32 - len));
@@ -172,7 +170,7 @@ int main(int argc, char *argv[]) {
       continue;
     }
 
-    if (!validateIPChecksum(packet, res)) {
+    if (!forward(packet, res)) {
       printf("Invalid IP Checksum\n");
       continue;
     }
@@ -294,6 +292,9 @@ int main(int argc, char *argv[]) {
           */
         }
       }
+      else {
+        printf("wrong\n");
+      }
     } else {
       // forward
       // beware of endianness
@@ -309,7 +310,7 @@ int main(int argc, char *argv[]) {
           // found
           memcpy(output, packet, res);
           // update ttl and checksum
-          forward(output, res);
+          // forward(output, res);
           // TODO: you might want to check ttl=0 case
           if (output[8] == 0) {
             continue;
